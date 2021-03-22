@@ -1,11 +1,10 @@
-import Parchment from 'parchment';
-import clone from 'clone';
-import equal from 'deep-equal';
-import Emitter from './emitter';
-import logger from './logger';
+import Parchment from "parchment";
+import clone from "clone";
+import equal from "deep-equal";
+import Emitter from "./emitter";
+import logger from "./logger";
 
-let debug = logger('quill:selection');
-
+let debug = logger("quill:selection");
 
 class Range {
   constructor(index, length = 0) {
@@ -14,7 +13,6 @@ class Range {
   }
 }
 
-
 class Selection {
   constructor(scroll, emitter) {
     this.emitter = emitter;
@@ -22,12 +20,12 @@ class Selection {
     this.composing = false;
     this.mouseDown = false;
     this.root = this.scroll.domNode;
-    this.cursor = Parchment.create('cursor', this);
+    this.cursor = Parchment.create("cursor", this);
     // savedRange is last non-null range
     this.lastRange = this.savedRange = new Range(0, 0);
     this.handleComposition();
     this.handleDragging();
-    this.emitter.listenDOM('selectionchange', document, () => {
+    this.emitter.listenDOM("selectionchange", document, () => {
       if (!this.mouseDown) {
         setTimeout(this.update.bind(this, Emitter.sources.USER), 1);
       }
@@ -41,12 +39,19 @@ class Selection {
       if (!this.hasFocus()) return;
       let native = this.getNativeRange();
       if (native == null) return;
-      if (native.start.node === this.cursor.textNode) return;  // cursor.restore() will handle
+      if (native.start.node === this.cursor.textNode) return; // cursor.restore() will handle
       // TODO unclear if this has negative side effects
       this.emitter.once(Emitter.events.SCROLL_UPDATE, () => {
         try {
-          this.setNativeRange(native.start.node, native.start.offset, native.end.node, native.end.offset);
-        } catch (ignored) {}
+          this.setNativeRange(
+            native.start.node,
+            native.start.offset,
+            native.end.node,
+            native.end.offset
+          );
+        } catch (ignored) {
+          // ignore
+        }
       });
     });
     this.emitter.on(Emitter.events.SCROLL_OPTIMIZE, (mutations, context) => {
@@ -59,26 +64,37 @@ class Selection {
   }
 
   handleComposition() {
-    this.root.addEventListener('compositionstart', () => {
+    this.root.addEventListener("compositionstart", () => {
       this.composing = true;
+      // console.log("compositionstart");
     });
-    this.root.addEventListener('compositionend', () => {
-      this.composing = false;
-      if (this.cursor.parent) {
-        const range = this.cursor.restore();
-        if (!range) return;
-        setTimeout(() => {
-          this.setNativeRange(range.startNode, range.startOffset, range.endNode, range.endOffset);
-        }, 1);
+    this.root.addEventListener("compositionend", () => {
+      if (this.composing) {
+        // console.log("compositionend");
+        this.composing = false;
+        if (this.cursor.parent) {
+          const range = this.cursor.restore();
+          if (!range) return;
+          setTimeout(() => {
+            if (this.cursor.parent) {
+              this.setNativeRange(
+                range.startNode,
+                range.startOffset,
+                range.endNode,
+                range.endOffset
+              );
+            }
+          }, 1);
+        }
       }
     });
   }
 
   handleDragging() {
-    this.emitter.listenDOM('mousedown', document.body, () => {
+    this.emitter.listenDOM("mousedown", document.body, () => {
       this.mouseDown = true;
     });
-    this.emitter.listenDOM('mouseup', document.body, () => {
+    this.emitter.listenDOM("mouseup", document.body, () => {
       this.mouseDown = false;
       this.update(Emitter.sources.USER);
     });
@@ -94,7 +110,12 @@ class Selection {
     if (this.scroll.whitelist != null && !this.scroll.whitelist[format]) return;
     this.scroll.update();
     let nativeRange = this.getNativeRange();
-    if (nativeRange == null || !nativeRange.native.collapsed || Parchment.query(format, Parchment.Scope.BLOCK)) return;
+    if (
+      nativeRange == null ||
+      !nativeRange.native.collapsed ||
+      Parchment.query(format, Parchment.Scope.BLOCK)
+    )
+      return;
     if (nativeRange.start.node !== this.cursor.textNode) {
       let blot = Parchment.find(nativeRange.start.node, false);
       if (blot == null) return;
@@ -103,7 +124,7 @@ class Selection {
         let after = blot.split(nativeRange.start.offset);
         blot.parent.insertBefore(this.cursor, after);
       } else {
-        blot.insertBefore(this.cursor, nativeRange.start.node);  // Should never happen
+        blot.insertBefore(this.cursor, nativeRange.start.node); // Should never happen
       }
       this.cursor.attach();
     }
@@ -117,7 +138,8 @@ class Selection {
     let scrollLength = this.scroll.length();
     index = Math.min(index, scrollLength - 1);
     length = Math.min(index + length, scrollLength - 1) - index;
-    let node, [leaf, offset] = this.scroll.leaf(index);
+    let node,
+      [leaf, offset] = this.scroll.leaf(index);
     if (leaf == null) return null;
     [node, offset] = leaf.position(offset, true);
     let range = document.createRange();
@@ -129,7 +151,7 @@ class Selection {
       range.setEnd(node, offset);
       return range.getBoundingClientRect();
     } else {
-      let side = 'left';
+      let side = "left";
       let rect;
       if (node instanceof Text) {
         if (offset < node.data.length) {
@@ -138,12 +160,12 @@ class Selection {
         } else {
           range.setStart(node, offset - 1);
           range.setEnd(node, offset);
-          side = 'right';
+          side = "right";
         }
         rect = range.getBoundingClientRect();
       } else {
         rect = leaf.domNode.getBoundingClientRect();
-        if (offset > 0) side = 'right';
+        if (offset > 0) side = "right";
       }
       return {
         bottom: rect.top + rect.height,
@@ -151,7 +173,7 @@ class Selection {
         left: rect[side],
         right: rect[side],
         top: rect.top,
-        width: 0
+        width: 0,
       };
     }
   }
@@ -162,7 +184,7 @@ class Selection {
     let nativeRange = selection.getRangeAt(0);
     if (nativeRange == null) return null;
     let range = this.normalizeNative(nativeRange);
-    debug.info('getNativeRange', range);
+    debug.info("getNativeRange", range);
     return range;
   }
 
@@ -196,44 +218,56 @@ class Selection {
     });
     let end = Math.min(Math.max(...indexes), this.scroll.length() - 1);
     let start = Math.min(end, ...indexes);
-    return new Range(start, end-start);
+    return new Range(start, end - start);
   }
 
   normalizeNative(nativeRange) {
-    if (!contains(this.root, nativeRange.startContainer) ||
-        (!nativeRange.collapsed && !contains(this.root, nativeRange.endContainer))) {
+    if (
+      !contains(this.root, nativeRange.startContainer) ||
+      (!nativeRange.collapsed && !contains(this.root, nativeRange.endContainer))
+    ) {
       return null;
     }
     let range = {
-      start: { node: nativeRange.startContainer, offset: nativeRange.startOffset },
+      start: {
+        node: nativeRange.startContainer,
+        offset: nativeRange.startOffset,
+      },
       end: { node: nativeRange.endContainer, offset: nativeRange.endOffset },
-      native: nativeRange
+      native: nativeRange,
     };
-    [range.start, range.end].forEach(function(position) {
-      let node = position.node, offset = position.offset;
+    [range.start, range.end].forEach(function (position) {
+      let node = position.node,
+        offset = position.offset;
       while (!(node instanceof Text) && node.childNodes.length > 0) {
         if (node.childNodes.length > offset) {
           node = node.childNodes[offset];
           offset = 0;
         } else if (node.childNodes.length === offset) {
           node = node.lastChild;
-          offset = node instanceof Text ? node.data.length : node.childNodes.length + 1;
+          offset =
+            node instanceof Text
+              ? node.data.length
+              : node.childNodes.length + 1;
         } else {
           break;
         }
       }
-      position.node = node, position.offset = offset;
+      (position.node = node), (position.offset = offset);
     });
     return range;
   }
 
   rangeToNative(range) {
-    let indexes = range.collapsed ? [range.index] : [range.index, range.index + range.length];
+    let indexes = range.collapsed
+      ? [range.index]
+      : [range.index, range.index + range.length];
     let args = [];
     let scrollLength = this.scroll.length();
     indexes.forEach((index, i) => {
       index = Math.min(scrollLength - 1, index);
-      let node, [leaf, offset] = this.scroll.leaf(index);
+      let node,
+        [leaf, offset] = this.scroll.leaf(index);
       [node, offset] = leaf.position(offset, i !== 0);
       args.push(node, offset);
     });
@@ -248,24 +282,35 @@ class Selection {
     if (range == null) return;
     let bounds = this.getBounds(range.index, range.length);
     if (bounds == null) return;
-    let limit = this.scroll.length()-1;
-    let [first, ] = this.scroll.line(Math.min(range.index, limit));
+    let limit = this.scroll.length() - 1;
+    let [first] = this.scroll.line(Math.min(range.index, limit));
     let last = first;
     if (range.length > 0) {
-      [last, ] = this.scroll.line(Math.min(range.index + range.length, limit));
+      [last] = this.scroll.line(Math.min(range.index + range.length, limit));
     }
     if (first == null || last == null) return;
     let scrollBounds = scrollingContainer.getBoundingClientRect();
     if (bounds.top < scrollBounds.top) {
-      scrollingContainer.scrollTop -= (scrollBounds.top - bounds.top);
+      scrollingContainer.scrollTop -= scrollBounds.top - bounds.top;
     } else if (bounds.bottom > scrollBounds.bottom) {
-      scrollingContainer.scrollTop += (bounds.bottom - scrollBounds.bottom);
+      scrollingContainer.scrollTop += bounds.bottom - scrollBounds.bottom;
     }
   }
 
-  setNativeRange(startNode, startOffset, endNode = startNode, endOffset = startOffset, force = false) {
-    debug.info('setNativeRange', startNode, startOffset, endNode, endOffset);
-    if (startNode != null && (this.root.parentNode == null || startNode.parentNode == null || endNode.parentNode == null)) {
+  setNativeRange(
+    startNode,
+    startOffset,
+    endNode = startNode,
+    endOffset = startOffset,
+    force = false
+  ) {
+    debug.info("setNativeRange", startNode, startOffset, endNode, endOffset);
+    if (
+      startNode != null &&
+      (this.root.parentNode == null ||
+        startNode.parentNode == null ||
+        endNode.parentNode == null)
+    ) {
       return;
     }
     let selection = document.getSelection();
@@ -273,14 +318,19 @@ class Selection {
     if (startNode != null) {
       if (!this.hasFocus()) this.root.focus();
       let native = (this.getNativeRange() || {}).native;
-      if (native == null || force ||
-          startNode !== native.startContainer ||
-          startOffset !== native.startOffset ||
-          endNode !== native.endContainer ||
-          endOffset !== native.endOffset) {
-
+      if (
+        native == null ||
+        force ||
+        startNode !== native.startContainer ||
+        startOffset !== native.startOffset ||
+        endNode !== native.endContainer ||
+        endOffset !== native.endOffset
+      ) {
         if (startNode.tagName == "BR") {
-          startOffset = [].indexOf.call(startNode.parentNode.childNodes, startNode);
+          startOffset = [].indexOf.call(
+            startNode.parentNode.childNodes,
+            startNode
+          );
           startNode = startNode.parentNode;
         }
         if (endNode.tagName == "BR") {
@@ -296,16 +346,16 @@ class Selection {
     } else {
       selection.removeAllRanges();
       this.root.blur();
-      document.body.focus();  // root.blur() not enough on IE11+Travis+SauceLabs (but not local VMs)
+      document.body.focus(); // root.blur() not enough on IE11+Travis+SauceLabs (but not local VMs)
     }
   }
 
   setRange(range, force = false, source = Emitter.sources.API) {
-    if (typeof force === 'string') {
+    if (typeof force === "string") {
       source = force;
       force = false;
     }
-    debug.info('setRange', range);
+    debug.info("setRange", range);
     if (range != null) {
       let args = this.rangeToNative(range);
       this.setNativeRange(...args, force);
@@ -323,10 +373,20 @@ class Selection {
       this.savedRange = this.lastRange;
     }
     if (!equal(oldRange, this.lastRange)) {
-      if (!this.composing && nativeRange != null && nativeRange.native.collapsed && nativeRange.start.node !== this.cursor.textNode) {
+      if (
+        !this.composing &&
+        nativeRange != null &&
+        nativeRange.native.collapsed &&
+        nativeRange.start.node !== this.cursor.textNode
+      ) {
         this.cursor.restore();
       }
-      let args = [Emitter.events.SELECTION_CHANGE, clone(this.lastRange), clone(oldRange), source];
+      let args = [
+        Emitter.events.SELECTION_CHANGE,
+        clone(this.lastRange),
+        clone(oldRange),
+        source,
+      ];
       this.emitter.emit(Emitter.events.EDITOR_CHANGE, ...args);
       if (source !== Emitter.sources.SILENT) {
         this.emitter.emit(...args);
@@ -334,7 +394,6 @@ class Selection {
     }
   }
 }
-
 
 function contains(parent, descendant) {
   try {
@@ -350,6 +409,5 @@ function contains(parent, descendant) {
   }
   return parent.contains(descendant);
 }
-
 
 export { Range, Selection as default };
